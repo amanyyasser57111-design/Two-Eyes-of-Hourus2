@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Two Eyes of Horus: Lunar Landing Site Navigator (Akhet)</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 42'%3E%3Cpath d='M2 38 L16 10 Q40 34 64 10 L78 38 Z' fill='none' stroke='%23ffc94a' stroke-width='4'/%3E%3Ccircle cx='40' cy='14' r='7' fill='%23ffc94a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&family=Sora:wght@300;400;600;700&family=Syncopate:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#05070d;--panel:rgba(10,14,24,.62);--ink:#e9ecf3;--mut:#8d97ab;--line:rgba(255,255,255,.12);--sun:#ffc94a;--earth:#5aa2ff;--ok:#4fd08a;--bad:#ff6b5e;--dark:#161b27;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 Sora,system-ui,sans-serif}
+.hero{position:relative;height:100svh;min-height:560px;overflow:hidden}
+#pov{position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none}#pov:active{cursor:grabbing}
+.glass{background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px}
+.brand{position:absolute;left:18px;top:18px;padding:14px 16px;max-width:330px}
+.brand h1{margin:0;font:400 19px/1.2 Sora,sans-serif;letter-spacing:.04em;display:flex;align-items:center;gap:10px}
+.brand p{margin:6px 0 10px;color:var(--mut);font-size:13px}
+select,input,button{font:13px Sora,system-ui,sans-serif;color:var(--ink);background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+select option{background:#10151f}button{cursor:pointer}button:hover{background:rgba(255,255,255,.14)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--earth);outline-offset:2px}
+.read{position:absolute;right:18px;top:18px;padding:14px 16px;min-width:280px}
+.read .r{display:flex;justify-content:space-between;gap:16px;padding:4px 0;font-variant-numeric:tabular-nums}.read .r span{color:var(--mut)}
+.chip{display:inline-block;padding:2px 10px;border-radius:99px;font-weight:600;font-size:12px}
+.on{background:rgba(79,208,138,.18);color:var(--ok)}.off{background:rgba(255,107,94,.18);color:var(--bad)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
+#globe{position:absolute;right:18px;top:290px;width:190px;height:190px;border-radius:14px;border:1px solid var(--line);background:rgba(5,7,13,.5)}
+.ctl{position:absolute;left:18px;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.ctl input[type=range]{flex:1;min-width:180px;padding:0;accent-color:var(--sun)}
+#tlabel{font-variant-numeric:tabular-nums;min-width:150px;color:var(--ink)}
+.hint{position:absolute;left:0;right:0;bottom:86px;text-align:center;color:var(--mut);font-size:12px;pointer-events:none}
+main{max-width:1060px;margin:auto;padding:48px 18px 70px}
+h2{font:600 22px Sora,sans-serif;margin:34px 0 6px}.sub{color:var(--mut);margin:0 0 16px;max-width:70ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.card{padding:14px 16px}.card h3{margin:0 0 8px;font:600 15px Sora,sans-serif}.card.sel{border-color:var(--sun)}
+.m{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)}.m b{font-variant-numeric:tabular-nums}
+.note{font-size:12px;color:var(--mut);margin-top:6px}.plain{margin:0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:8px 0}.row label{display:flex;flex-direction:column;gap:3px;color:var(--mut);font-size:12px}
+.wrap{overflow-x:auto}canvas{display:block;max-width:100%}
+.warn{border-left:3px solid var(--sun);padding:10px 14px;margin:20px 0;color:var(--mut);font-size:13px;background:rgba(255,201,74,.06);border-radius:0 8px 8px 0}
+.intro-ui{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;text-align:center;padding:0 6vw 7vh;pointer-events:none;transition:opacity 1.3s ease,transform 1.8s ease;background:linear-gradient(180deg,rgba(5,7,13,0) 60%,rgba(5,7,13,.4) 100%)}
+.intro-ui h1{font:400 clamp(22px,4.2vw,64px)/1.1 Syncopate,sans-serif;letter-spacing:.14em;margin:14px 0 0;text-transform:uppercase;text-shadow:0 4px 50px rgba(0,0,0,.6)}
+.intro-ui p{margin:16px 0 28px;max-width:46ch;color:#c4cbdb;font-weight:300;font-size:clamp(14px,1.6vw,18px)}
+#enter{pointer-events:auto;padding:14px 44px;font-size:15px;letter-spacing:.16em;border-radius:99px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#enter:hover{background:#fff;color:#05070d}
+body:not(.intro) .intro-ui{opacity:0;transform:translateY(-24px)}body:not(.intro) #enter{pointer-events:none}
+.brand,.read,#globe,.ctl,.hint{transition:opacity 1.2s ease 1.6s}
+body.intro .brand,body.intro .read,body.intro #globe,body.intro .ctl,body.intro .hint{opacity:0;pointer-events:none}
+body.intro main{display:none}
+body,button,select,input,h2,h3,.brand h1,.intro-ui p{font-family:Outfit,system-ui,sans-serif!important}
+.tag{position:absolute;pointer-events:none;color:#e9ecf3;font:300 14px/1.35 Outfit,sans-serif;letter-spacing:.04em;transition:opacity 1s ease;text-shadow:0 1px 12px rgba(0,0,0,.85);border-left:1px solid rgba(255,255,255,.55);padding-left:10px}.tag b{display:block;font-weight:600;font-size:16px;letter-spacing:.16em}.tag small{color:#b4bdd0;font-size:13px}
+body:not(.intro) .tag{opacity:0}
+[data-glyph]{color:var(--sun);display:inline-flex;align-items:center}[data-glyph] svg{width:28px;height:15px}.biglyph svg{width:92px;height:48px}.biglyph{filter:drop-shadow(0 0 18px rgba(255,201,74,.55))}
+#enter{display:inline-flex;align-items:center;gap:12px}
+.eye{width:64px;height:40px;overflow:visible;opacity:.45;transition:opacity .4s,filter .4s;flex:none}.eye *{fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}.eye .almond{fill:rgba(255,255,255,.05)}.eye .pupil{fill:currentColor;stroke:none}.eye .glint{fill:#fff;stroke:none}
+.eye .lid{transform-box:fill-box;transform-origin:center;transform:scaleY(.07);transition:transform .45s cubic-bezier(.3,.7,.2,1)}.eye.open{opacity:1;filter:drop-shadow(0 0 6px currentColor)}.eye.open .lid{transform:scaleY(1)}
+.sunEye{color:var(--sun)}.moonEye{color:var(--earth)}
+.eyeblk{display:flex;align-items:center;gap:14px;padding:8px 0;border-bottom:1px solid var(--line)}.eyeblk>div{color:var(--ink);min-width:0}.eyeblk h4{margin:0;font:600 14px Outfit,sans-serif}.eyeblk em{display:block;font-style:normal;color:var(--mut);font-size:12px}.eyeblk small{color:var(--mut);font-size:12px}.st{display:block;font-weight:600;font-size:13px;margin:3px 0 1px}.st.go{color:var(--ok)}.st.stop{color:var(--bad)}
+.akhet{display:flex;align-items:center;gap:8px;margin-top:8px;padding:6px 10px;border-radius:8px;font-size:12px;color:var(--sun);opacity:0;border:1px solid transparent;transition:opacity .4s}.akhet.on{opacity:1;border-color:rgba(255,201,74,.5);background:rgba(255,201,74,.08);animation:pulse 1.8s ease-in-out infinite}@keyframes pulse{50%{box-shadow:0 0 18px rgba(255,201,74,.45)}}@media(prefers-reduced-motion:reduce){.akhet.on{animation:none}}
+.eyes2{display:flex;gap:10px;margin:4px 0 10px}.e1{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:10px;border:1px solid var(--line)}.e1 b{font-size:22px;font-variant-numeric:tabular-nums}.e1 small{color:var(--mut);font-size:12px;text-align:center}.e1 .eye{width:56px;height:34px}
+.tbl{width:100%;min-width:520px;border-collapse:collapse;font-variant-numeric:tabular-nums}.tbl th{font-weight:600;color:var(--mut);font-size:12px}.tbl th,.tbl td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}.tbl th:first-child,.tbl td:first-child{text-align:left}.tbl td.best{color:var(--ok);font-weight:600}.tbl tr.top td:first-child{color:var(--sun);font-weight:600}.tbl button{padding:4px 10px;font-size:12px}
+.pick{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px}.pick label{display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--line);border-radius:99px;cursor:pointer;background:rgba(255,255,255,.05)}.pick input{accent-color:var(--sun);padding:0}
+.bestbox{padding:16px 18px;margin:14px 0;border-color:rgba(255,201,74,.45)}
+#smap{height:430px;border-radius:14px;border:1px solid var(--line);margin:8px 0;background:#080f1b}.leaflet-container{background:#080f1b;font-family:inherit}.leaflet-tooltip{background:rgba(5,7,13,.8);color:#e9ecf3;border:1px solid var(--line);box-shadow:none}
+.lnk{color:var(--earth)}.src{padding:3px 11px;border-radius:99px;border:1px solid var(--line);font-size:12px}.src.ok{color:var(--ok);border-color:rgba(79,208,138,.45)}.src.fb{color:var(--sun);border-color:rgba(255,201,74,.45)}
+@media(max-width:700px){#globe{display:none}.read{top:auto;bottom:150px;right:18px;left:18px}.brand{right:18px;max-width:none}}
+</style></head><body class="intro">
+<section class="hero">
+<canvas id="pov"></canvas>
+<div class="intro-ui"><div class="biglyph" data-glyph></div><h1>Two Eyes of Horus</h1><p>Akhet: the horizon. At the Moon's south pole, sunlight and the line home rise and vanish behind the ridges. Find the landing site where both eyes stay open.</p><button id="enter"><span data-glyph></span>Enter</button></div>
+<div class="tag" id="tagE"><b>EARTH</b></div><div class="tag" id="tagM" style="left:5vw;bottom:34vh"><b>THE MOON</b><small>South pole, 89.5°S</small></div>
+<div class="brand glass"><h1><span data-glyph></span>Two Eyes of Horus</h1><p>Akhet, the horizon. Pick a south pole site and watch both eyes open and close.</p>
+<select id="site" aria-label="Landing site"></select></div>
+<div class="read glass">
+<div class="eyeblk sunEye"><span data-eye></span><div><h4>Sun eye</h4><em>Solar power</em><b id="pwr" class="st">-</b><small>Sun elevation <span id="sunEl">-</span></small></div></div>
+<div class="eyeblk moonEye"><span data-eye></span><div><h4>Moon eye</h4><em>Line of sight home</em><b id="com" class="st">-</b><small>Earth elevation <span id="earEl">-</span></small></div></div>
+<div class="akhet" id="akhet"><span data-glyph></span>Akhet: the Sun is on the horizon</div></div>
+<canvas id="globe" width="190" height="190"></canvas>
+<div class="hint">Drag to look around. Sun and Earth are drawn 3× larger than real so you can see them.</div>
+<div class="ctl glass">
+<button id="play" aria-label="Play or pause">Play</button>
+<select id="spd" aria-label="Speed"><option value="3">3 h/s</option><option value="12" selected>12 h/s</option><option value="48">2 days/s</option></select>
+<input type="range" id="slider" min="0" max="0" value="0" aria-label="Time">
+<span id="tlabel"></span>
+<button id="lookS">Look at Sun</button><button id="lookE">Look at Earth</button>
+<button id="nextS">Next sunrise/sunset</button><button id="nextE">Next Earth gain/loss</button>
+</div></section>
+
+<main>
+<h2>Mission analysis</h2>
+<p class="sub">The same Horizons data, summarised over the whole date range. Compare sites by power and communication, then pick your landing window.</p>
+<div class="row">
+<label>Start date<input type="date" id="start"></label>
+<label>Length (days)<input type="number" id="days" value="30" min="2" max="365" style="width:90px"></label>
+<label>Best window (days)<input type="number" id="win" value="7" min="1" max="60" style="width:90px"></label>
+<button id="go">Recompute</button><button id="mode">Switch to simple view</button></div>
+<div class="row"><label>Rank sites by<select id="crit"></select></label>
+<span id="eph" class="note" style="max-width:62ch;margin:0 0 6px"></span></div>
+<div class="row"><label>Custom site name<input id="cName" placeholder="optional" style="width:150px"></label><label>Latitude °<input id="cLat" type="number" step="any" min="-90" max="90" placeholder="-89.0" style="width:100px"></label><label>Longitude °E<input id="cLon" type="number" step="any" min="-180" max="360" placeholder="30.0" style="width:100px"></label><button id="addSite">Add custom site</button><span class="note" id="cErr" style="margin:0"></span></div>
+<div class="glass bestbox" id="best"></div>
+<div class="grid" id="cards"></div>
+<h2>Timeline</h2>
+<p class="sub"><span style="color:var(--sun)">Yellow</span> bars: Sun visible. <span style="color:var(--earth)">Blue</span> bars: Earth visible. Dark: blocked or below the horizon.</p>
+<div class="wrap"><canvas id="tl"></canvas></div>
+<h2>Site map</h2>
+<p class="sub">NASA Moon Trek imagery (LRO wide-angle camera mosaic). Click a marker to select that site everywhere on this page.</p>
+<div class="row"><button id="mzoom">Zoom to selected site</button><button id="mall">Whole Moon</button></div>
+<div id="smap"></div>
+
+<h2>Compare sites</h2>
+<p class="sub">Tick the sites to put side by side over the date range chosen above. The best value in each row is green.</p>
+<div class="pick" id="pick"></div>
+<div class="wrap"><table class="tbl" id="cmpT"></table></div>
+<div class="wrap"><canvas id="cmpC"></canvas></div>
+
+<h2>Compare times at one site</h2>
+<p class="sub">Same site, different periods of the same length. Use it to see how much a schedule slip changes sunlight and the line home. Leave Period C empty to compare two.</p>
+<div class="row"><label>Site<select id="tsite"></select></label><label>Period length (days)<input type="number" id="tlen" value="7" min="1" max="60" style="width:90px"></label>
+<label>Period A<input type="date" id="pa"></label><label>Period B<input type="date" id="pb"></label><label>Period C (optional)<input type="date" id="pc"></label><button id="tgo">Compare periods</button></div>
+<div class="wrap"><table class="tbl" id="timeT"></table></div>
+<p class="sub" style="margin-top:12px"><span style="color:var(--sun)">Yellow</span> Sun visible, <span style="color:var(--earth)">blue</span> Earth visible, <span style="color:var(--ok)">green</span> both visible together.</p>
+<div class="wrap"><canvas id="timeC"></canvas></div>
+
+<h2>Find the best landing window</h2>
+<p class="sub">Slides a mission of fixed length across a longer range for every site, and finds the site and start date that keep both eyes open the most. Each line is the share of the mission with Sun and Earth both visible, by start date. The dot marks the best start.</p>
+<div class="row"><label>Scan from<input type="date" id="sfrom"></label><label>Scan range (days)<input type="number" id="srange" value="120" min="5" max="365" style="width:90px"></label>
+<label>Mission length (days)<input type="number" id="slen" value="7" min="1" max="60" style="width:90px"></label><button id="sgo">Scan all sites</button></div>
+<div id="scanOut"><p class="note">Press “Scan all sites”. A 120-day scan takes a few seconds.</p></div>
+<div class="wrap"><canvas id="scanC"></canvas></div>
+
+<h2>NASA data &amp; resources</h2>
+<p class="sub">Sun and Earth positions come only from JPL Horizons, terrain only from NASA LOLA elevation data, and imagery only from Moon Trek. Site coordinates are approximate published landing-site values: check them in Quickmap. The chips show which source is actually loaded right now.</p>
+<div class="pick" id="srcStat"></div>
+<div class="grid">
+<div class="card glass"><h3>JPL Horizons</h3><p class="plain">Sun and Earth azimuth and elevation for a Moon-fixed observer (libration included), requested live from the Horizons API for every site.</p>
+<div class="note" id="hzCheck"></div><div class="note"><a class="lnk" href="https://ssd.jpl.nasa.gov/horizons/" target="_blank" rel="noopener">Open Horizons</a></div></div>
+<div class="card glass"><h3>LOLA topography</h3><p class="plain">Terrain horizon masks ray-marched across the LRO LOLA south-polar elevation model (it stops at 80°S, so sites further north have no mask). They are built by <code>tools/make_lola_horizons.py</code> and loaded from <code>lola_horizons.json</code>.</p>
+<div class="note" id="terrNote"></div><div class="note"><a class="lnk" href="https://pgda.gsfc.nasa.gov/products/90" target="_blank" rel="noopener">LOLA south-pole DEM</a></div></div>
+<div class="card glass"><h3>Moon Trek</h3><p class="plain">The Moon texture on the small globe and the site map are NASA Moon Trek tiles. Use Moon Trek to look at the terrain around a site in 3D.</p>
+<div class="note"><a class="lnk" href="https://trek.nasa.gov/moon/" target="_blank" rel="noopener">Open Moon Trek</a></div></div>
+<div class="card glass"><h3>Quickmap</h3><p class="plain">High-resolution LRO imagery, slopes and illumination for the selected site. Copy the coordinates, open Quickmap and search for them.</p>
+<div class="note"><code id="coords"></code> <button id="copyc" style="padding:3px 9px;font-size:12px">Copy</button></div><div class="note"><a class="lnk" href="https://quickmap.lroc.asu.edu/" target="_blank" rel="noopener">Open Quickmap</a></div></div>
+</div>
+
+<div class="warn" id="warn">Loading data sources…</div>
+</main>
+
+<script>
+const D=Math.PI/180,$=id=>document.getElementById(id);
+/* Terrain horizons (hz) are NEVER invented: they stay null until lola_horizons.json (built from NASA LOLA) provides them. */
+const SITES=[
+{id:'mal',name:'Malapert Massif',lat:-85.99,lon:0.12,hz:null},
+{id:'hay',name:'Haworth rim',lat:-87.45,lon:-5.0,hz:null},
+{id:'nob',name:'Nobile Rim 1 (Griffin)',lat:-85.4,lon:31.4,hz:null},
+{id:'con',name:'Connecting Ridge',lat:-89.45,lon:222.9,hz:null},
+{id:'sha',name:'Shackleton rim',lat:-89.54,lon:129.8,hz:null},
+{id:'mou',name:'Mons Mouton (IM-2)',lat:-84.8,lon:29.2,hz:null},
+{id:'mpa',name:'Malapert A (IM-1)',lat:-80.13,lon:1.44,hz:null},
+{id:'ch3',name:'Chandrayaan-3',lat:-69.3733,lon:32.3189,hz:null},
+{id:'ch4',name:'Chang\'e-4',lat:-45.4446,lon:177.5991,hz:null},
+{id:'bg1',name:'Blue Ghost 1 (Mare Crisium)',lat:18.56,lon:61.81,hz:null},
+{id:'a11',name:'Apollo 11',lat:0.6741,lon:23.4730,hz:null},
+{id:'a12',name:'Apollo 12',lat:-3.0128,lon:-23.4219,hz:null},
+{id:'a14',name:'Apollo 14',lat:-3.6453,lon:-17.4714,hz:null},
+{id:'a15',name:'Apollo 15',lat:26.1322,lon:3.6330,hz:null},
+{id:'a16',name:'Apollo 16',lat:-8.9734,lon:15.5011,hz:null},
+{id:'a17',name:'Apollo 17',lat:20.1908,lon:30.7717,hz:null}];
+let CUS=0;
+$('start').value=new Date().toISOString().slice(0,10);
+let steps=[],res={},cur=SITES[0],idx=0,playing=false,yaw=0,pitch=5*D,simple=false;const SH=1;
+/* ---------- BRAND: Eye of Horus (wedjat) and Akhet glyph ---------- */
+const WEDJAT="<svg class='eye' viewBox='0 0 72 44' aria-hidden='true'><path class='brow' d='M8 9 Q36 -1 64 9'/><g class='lid'><path class='almond' d='M6 22 Q36 4 66 22 Q36 40 6 22Z'/><circle class='pupil' cx='36' cy='22' r='8'/><circle class='glint' cx='39' cy='19' r='2.2'/></g><path class='tear' d='M44 34 L50 42 Q56 44 58 38'/><path class='curl' d='M28 34 Q22 42 14 40 Q8 38 11 33 Q14 30 17 33'/></svg>";
+const GLYPH="<svg viewBox='0 0 80 42' aria-hidden='true'><path d='M2 38 L16 10 Q40 34 64 10 L78 38 Z' fill='none' stroke='currentColor' stroke-width='3' stroke-linejoin='round'/><circle cx='40' cy='14' r='7' fill='currentColor'/></svg>";
+const eyeP=p=>WEDJAT.replace("class='eye'","class='eye open'").replace("class='lid'",`class='lid' style='transform:scaleY(${Math.max(.07,p/100).toFixed(2)})'`);
+const eyes2=r=>`<div class="eyes2"><div class="e1 sunEye">${eyeP(r.sp)}<b>${r.sp.toFixed(0)}%</b><small>Sun eye open: power</small></div><div class="e1 moonEye">${eyeP(r.ep)}<b>${r.ep.toFixed(0)}%</b><small>Moon eye open: link home</small></div></div>`;
+document.querySelectorAll('[data-eye]').forEach(n=>n.innerHTML=WEDJAT);document.querySelectorAll('[data-glyph]').forEach(n=>n.innerHTML=GLYPH);
+/* ---------- ENGINE ---------- */
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],cr=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const nm=a=>{const l=Math.hypot(...a);return a.map(v=>v/l)},sc=(a,k)=>a.map(v=>v*k),sb=(a,b)=>a.map((v,i)=>v-b[i]);
+function frame(date){return{t:date.getTime()}}
+/* Sun/Earth direction in the Moon-fixed frame, rebuilt from the Horizons azimuth/elevation at a site (used only to light the little globe) */
+function bodyVec(site,a){const p=site.lat*D,l=site.lon*D,up=[Math.cos(p)*Math.cos(l),Math.cos(p)*Math.sin(l),Math.sin(p)],
+ no=[-Math.sin(p)*Math.cos(l),-Math.sin(p)*Math.sin(l),Math.cos(p)],ea=[-Math.sin(l),Math.cos(l),0],e=a.el*D,z=a.az*D,c=Math.cos(e);
+ return up.map((u,i)=>Math.sin(e)*u+c*(Math.cos(z)*no[i]+Math.sin(z)*ea[i]))}
+/* smooth-sphere horizon (0°) when no LOLA mask exists for the site */
+function mask(s,az){if(!s.hz)return 0;const n=s.hz.length,p=((az%360)+360)%360/360*n,i=Math.floor(p)%n,t=p-Math.floor(p);return s.hz[i]*(1-t)+s.hz[(i+1)%n]*t}
+const SUNR=.27;
+/* JPL Horizons is the only ephemeris source: no fallback engine */
+const HZC=new Map(),SRC={eph:'none',terrain:'none',imagery:'procedural'};let hzDead=false;
+const NOD={az:0,el:-90};
+const sAEf=(s,f)=>{const h=HZC.get(s.id+'|'+f.t);return h&&h.sun?h.sun:NOD},eAEf=(s,f)=>{const h=HZC.get(s.id+'|'+f.t);return h&&h.ea?h.ea:NOD};
+function longest(a,v){let b=0,c=0;for(const x of a){x===v?b=Math.max(b,++c):c=0}return b}
+function computeNow(){
+ const days=+$('days').value,n=Math.floor(days*24/SH),t0=new Date($('start').value+'T00:00:00Z').getTime();
+ steps=[];for(let i=0;i<n;i++)steps.push(frameAt(t0+i*SH*36e5));
+ res={};const W=Math.max(1,Math.round(+$('win').value*24/SH));
+ for(const s of SITES){const sun=[],ea=[];
+  for(const f of steps){const a=sAEf(s,f),b=eAEf(s,f);sun.push(a.el+SUNR>mask(s,a.az));ea.push(b.el>mask(s,b.az))}
+  const pc=a=>a.reduce((x,y)=>x+y,0)/a.length*100,ps=[0],pe=[0];sun.forEach((v,i)=>{ps.push(ps[i]+v);pe.push(pe[i]+ea[i])});
+  let best=-1,bi=0;for(let i=0;i+W<=n;i++){const q=ps[i+W]-ps[i]+pe[i+W]-pe[i];if(q>best){best=q;bi=i}}
+  const both=sun.map((v,i)=>v&&ea[i]);res[s.id]={s,sun,ea,both,bp:pc(both),bothRun:longest(both,true)*SH,sp:pc(sun),ep:pc(ea),dark:longest(sun,false)*SH,blk:longest(ea,false)*SH,bi,bs:(ps[bi+W]-ps[bi])/W*100,be:(pe[bi+W]-pe[bi])/W*100}}
+ idx=0;$('slider').max=n-1;rank();compare();cards();timeline();look('E');upd();hzCheck();
+}
+/* ---------- 3D SCENE ---------- */
+const rnd=(()=>{let s=11;return()=>(s=s*16807%2147483647)/2147483647})();
+const tex=(w,h,fn)=>{const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);return new THREE.CanvasTexture(c)};
+const glowT=tex(128,128,(g)=>{const r=g.createRadialGradient(64,64,0,64,64,64);r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.15,'rgba(255,230,170,.7)');r.addColorStop(.5,'rgba(255,190,90,.15)');r.addColorStop(1,'rgba(255,170,60,0)');g.fillStyle=r;g.fillRect(0,0,128,128)});
+const earthT=tex(512,256,(g,w,h)=>{const o=g.createLinearGradient(0,0,0,h);o.addColorStop(0,'#cfe2f5');o.addColorStop(.12,'#1d4f91');o.addColorStop(.88,'#1d4f91');o.addColorStop(1,'#e8f2fb');g.fillStyle=o;g.fillRect(0,0,w,h);
+ for(let i=0;i<46;i++){g.fillStyle=rnd()<.5?'#3f7d3c':'#9a8b57';g.beginPath();g.ellipse(rnd()*w,h*.15+rnd()*h*.7,10+rnd()*46,6+rnd()*26,rnd()*3,0,7);g.fill()}
+ g.fillStyle='rgba(255,255,255,.6)';for(let i=0;i<70;i++){g.beginPath();g.ellipse(rnd()*w,rnd()*h,14+rnd()*50,2+rnd()*7,rnd()*.6,0,7);g.fill()}});
+const moonT=tex(512,256,(g,w,h)=>{g.fillStyle='#8f8e8a';g.fillRect(0,0,w,h);
+ for(let i=0;i<12;i++){g.fillStyle='rgba(55,55,60,.55)';g.beginPath();g.ellipse(rnd()*w,h*.2+rnd()*h*.6,20+rnd()*45,14+rnd()*30,rnd()*3,0,7);g.fill()}
+ for(let i=0;i<900;i++){const x=rnd()*w,y=rnd()*h,r=1+rnd()*rnd()*14;g.fillStyle=`rgba(40,40,44,${.15+rnd()*.25})`;g.beginPath();g.arc(x,y,r,0,7);g.fill();g.strokeStyle='rgba(235,235,230,.28)';g.lineWidth=1;g.beginPath();g.arc(x-.5,y-.5,r,0,7);g.stroke()}});
+const soilT=tex(512,512,(g,w,h)=>{g.fillStyle='#8d8b85';g.fillRect(0,0,w,h);for(let i=0;i<14000;i++){const v=105+rnd()*70|0;g.fillStyle=`rgba(${v},${v-2},${v-6},.55)`;const r=rnd()*2.4;g.fillRect(rnd()*w,rnd()*h,r+.6,r+.6)}});
+soilT.wrapS=soilT.wrapT=THREE.RepeatWrapping;soilT.repeat.set(70,70);
+const cv=$('pov'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(2,devicePixelRatio));
+const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(62,1,1,3000);cam.rotation.order='YXZ';cam.position.set(0,2,0);
+const stars=(()=>{const p=[],c=[];for(let i=0;i<3500;i++){const u=rnd()*2-1,t=rnd()*6.283,r=Math.sqrt(1-u*u),k=rnd();p.push(1900*r*Math.cos(t),1900*u,1900*r*Math.sin(t));const b=.4+.6*k*k;c.push(b,b,b*(.85+.3*rnd()))}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('color',new THREE.Float32BufferAttribute(c,3));
+ return new THREE.Points(g,new THREE.PointsMaterial({size:2.1,vertexColors:true,sizeAttenuation:false,fog:false}))})();scene.add(stars);
+const sunL=new THREE.DirectionalLight(0xfff2dd,0),amb=new THREE.AmbientLight(0x4a5a78,.25);scene.add(sunL,amb);
+const ground=new THREE.Mesh(new THREE.CircleGeometry(800,64),new THREE.MeshLambertMaterial({map:soilT}));ground.rotation.x=-Math.PI/2;scene.add(ground);
+const ridge=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshLambertMaterial({color:0x7a7872,side:THREE.DoubleSide}));scene.add(ridge);
+function buildRidge(s){const p=[],ix=[];for(let a=0;a<=360;a++){const h=Math.tan(mask(s,a%360)*D)*800,x=800*Math.sin(a*D),z=-800*Math.cos(a*D);p.push(x,-40,z,x,h,z);if(a){const k=(a-1)*2;ix.push(k,k+1,k+2,k+1,k+3,k+2)}}
+ ridge.geometry.dispose();const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setIndex(ix);g.computeVertexNormals();ridge.geometry=g}
+const mkS=(m,s)=>{const o=new THREE.Sprite(new THREE.SpriteMaterial({map:glowT,color:0xffffff,blending:THREE.AdditiveBlending,depthWrite:false,fog:false,...m}));o.scale.set(s,s,1);scene.add(o);return o};
+const sunCore=mkS({},1),sunGlow=mkS({opacity:.9},1),sunHalo=mkS({opacity:.35},1);
+const earthM=new THREE.Mesh(new THREE.SphereGeometry(1,48,32),new THREE.ShaderMaterial({uniforms:{map:{value:earthT},uSun:{value:new THREE.Vector3(1,0,0)}},
+ vertexShader:'varying vec3 n;varying vec2 u;void main(){n=normalize(mat3(modelMatrix)*normal);u=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+ fragmentShader:'uniform sampler2D map;uniform vec3 uSun;varying vec3 n;varying vec2 u;void main(){float l=clamp(dot(normalize(n),uSun),0.,1.);float rim=pow(1.-abs(normalize(n).z*0.),1.);vec3 c=texture2D(map,u).rgb;gl_FragColor=vec4(c*(0.03+1.05*l)+vec3(.05,.12,.3)*pow(1.-l,3.)*.15,1.);}'}));scene.add(earthM);
+const earthGlow=mkS({color:0x6fa8ff,opacity:.3},1);
+const streak=mkS({opacity:.5,color:0xcfe0ff},1),earthL=new THREE.DirectionalLight(0x7fa8ff,0);scene.add(earthL);
+const NOISE='float h3(vec3 p){p=fract(p*.3183099+.1);p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}float vn(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(mix(h3(i),h3(i+vec3(1,0,0)),f.x),mix(h3(i+vec3(0,1,0)),h3(i+vec3(1,1,0)),f.x),f.y),mix(mix(h3(i+vec3(0,0,1)),h3(i+vec3(1,0,1)),f.x),mix(h3(i+vec3(0,1,1)),h3(i+vec3(1,1,1)),f.x),f.y),f.z);}float fbm(vec3 p){float a=.5,s=0.;for(int i=0;i<4;i++){s+=a*vn(p);p=p*2.02+7.1;a*=.5;}return s;}';
+const EMAT=new THREE.ShaderMaterial({uniforms:{uSun:{value:new THREE.Vector3(1,0,0)},uT:{value:0}},
+ vertexShader:'varying vec3 vP;varying vec3 vWN;varying vec3 vW;void main(){vP=position;vWN=normalize(mat3(modelMatrix)*normal);vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
+ fragmentShader:'uniform vec3 uSun;uniform float uT;varying vec3 vP;varying vec3 vWN;varying vec3 vW;'+NOISE+'void main(){vec3 N=normalize(vWN),V=normalize(cameraPosition-vW),p=normalize(vP);float l=dot(N,uSun),day=smoothstep(-.2,.25,l),lat=abs(p.y);float land=fbm(p*2.1+vec3(3.,1.,5.));float isL=smoothstep(.5,.54,land);float ice=smoothstep(.8,.88,lat+.1*fbm(p*6.));vec3 ocean=mix(vec3(.02,.1,.3),vec3(.06,.34,.62),smoothstep(.36,.5,land));float dry=smoothstep(.48,.64,fbm(p*2.6+vec3(9.,2.,4.))+.15*(1.-lat));vec3 lc=mix(mix(vec3(.05,.2,.06),vec3(.14,.32,.1),fbm(p*9.)),vec3(.58,.46,.28),dry);lc=mix(lc,vec3(.45,.42,.38),smoothstep(.62,.8,land));vec3 surf=mix(mix(ocean,lc,isL),vec3(.92,.95,1.),ice);vec3 H=normalize(uSun+V);float spec=pow(max(dot(N,H),0.),90.)*(1.-isL)*(1.-ice)*day;float cl=smoothstep(.5,.75,fbm(p*3.4+vec3(uT*.004,0.,uT*.002))+.12*fbm(p*12.));vec3 col=surf*day*1.9+spec*vec3(1.,.9,.7)*1.2;col=mix(col,vec3(.95,.97,1.)*(.06+1.25*day),cl*.85);float city=isL*(1.-ice)*smoothstep(.62,.8,fbm(p*18.))*smoothstep(.45,.6,fbm(p*5.+vec3(2.)))*(1.-day)*(1.-cl*.8);col+=city*vec3(1.,.72,.35)*1.3+surf*.05+vec3(.004,.01,.03);float fr=pow(1.-max(dot(N,V),0.),3.);col+=vec3(.25,.55,1.)*fr*(.25+1.6*smoothstep(-.3,.5,l));gl_FragColor=vec4(col,1.);}'});
+earthM.material.dispose();earthM.material=EMAT;
+const atm=new THREE.Mesh(new THREE.SphereGeometry(1.07,48,32),new THREE.ShaderMaterial({uniforms:{uSun:EMAT.uniforms.uSun},side:THREE.BackSide,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,
+ vertexShader:'varying vec3 vN;varying vec3 vWN;void main(){vN=normalize(normalMatrix*normal);vWN=normalize(mat3(modelMatrix)*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+ fragmentShader:'uniform vec3 uSun;varying vec3 vN;varying vec3 vWN;void main(){float a=pow(smoothstep(0.,.36,abs(vN.z)),1.6);float lit=smoothstep(-.35,.55,dot(normalize(vWN),uSun));gl_FragColor=vec4(vec3(.3,.6,1.)*a*2.6*(.18+lit),1.);}'}));earthM.add(atm);
+/* ---- cinematic intro: rolling dunes, rocks, big Earth with the Sun at its limb ---- */
+const hs=(x,y)=>{const s=Math.sin(x*127.1+y*311.7)*43758.5453;return s-Math.floor(s)};
+const vn2=(x,y)=>{const i=Math.floor(x),j=Math.floor(y),u=x-i,v=y-j,a=u*u*(3-2*u),b=v*v*(3-2*v);return(hs(i,j)*(1-a)+hs(i+1,j)*a)*(1-b)+(hs(i,j+1)*(1-a)+hs(i+1,j+1)*a)*b};
+const fb2=(x,y)=>{let s=0,a=.5;for(let i=0;i<4;i++){s+=a*vn2(x,y);x=x*2.03+5;y=y*2.03+9;a/=2}return s};
+const CR=Array.from({length:40},()=>{const a=rnd()*6.283,r=30+Math.pow(rnd(),1.4)*430;return[r*Math.sin(a),-r*Math.cos(a),14+rnd()*rnd()*75]});
+const crat=(x,z)=>{let h=0;for(const[c,d,r]of CR){const q=Math.hypot(x-c,z-d)/r;if(q<1.4)h+=(q<1?-(1-q*q)*r*.16:0)+r*.05*Math.exp(-Math.pow((q-1)*4,2))}return h};
+const hgt=(x,z)=>{const d=Math.hypot(x,z),k=Math.min(1,Math.max(0,(d-5)/90))*(1-Math.min(1,Math.max(0,(d-480)/260)));return k*Math.max(0,fb2(x*.0045,z*.0045)-.32)*34+k*fb2(x*.05,z*.05)*1.6+k*crat(x,z)};
+ground.position.y=-30;
+const dunes=(()=>{const g=new THREE.PlaneGeometry(1500,1500,230,230);g.rotateX(-Math.PI/2);const p=g.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setY(i,Math.hypot(x,z)>790?-60:hgt(x,z))}g.computeVertexNormals();const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({map:soilT}));scene.add(m);return m})();
+const rocks=new THREE.Group();scene.add(rocks);
+{const g=new THREE.DodecahedronGeometry(1,0),m=new THREE.MeshLambertMaterial({color:0x77746f,flatShading:true});for(let i=0;i<170;i++){const r=7+Math.pow(rnd(),1.6)*140,a=rnd()*6.283,x=r*Math.sin(a),z=-r*Math.cos(a),s=.1+Math.pow(rnd(),3)*1.5,o=new THREE.Mesh(g,m);o.position.set(x,hgt(x,z)+s*.2,z);o.scale.set(s,s*.6,s*.9);o.rotation.set(rnd()*3,rnd()*3,rnd()*3);rocks.add(o)}}
+let K=0,KT=-1,introRun=true,REAL=null,mx=.5,my=.5;addEventListener('pointermove',e=>{mx=e.clientX/innerWidth;my=e.clientY/innerHeight});
+let EP0=new THREE.Vector3(),SP0=new THREE.Vector3(),T0=-1;const ER0=1000*Math.tan(17*D);
+function setIntro(s){const q=Math.min(1,Math.max(0,(s-.5)/9)),el=(5+12*(1-Math.pow(1-q,3)))*D,az=4*D;EP0.set(Math.sin(az)*Math.cos(el),Math.sin(el),-Math.cos(az)*Math.cos(el)).multiplyScalar(1000);const f=EP0.clone().normalize(),r=new THREE.Vector3().crossVectors(f,new THREE.Vector3(0,1,0)).normalize(),u=new THREE.Vector3().crossVectors(r,f);SP0.copy(EP0).addScaledVector(r,ER0*1.05).addScaledVector(u,ER0*.7).addScaledVector(f,ER0*.35)}setIntro(0);
+function blend(s=performance.now()/1e3){
+ if(!REAL)return;const e=K*K*(3-2*K),V=(a,b)=>a.clone().lerp(b,e),L=(a,b)=>a+(b-a)*e;
+ const rE=REAL.ev.clone().multiplyScalar(1000),rS=REAL.sv.clone().multiplyScalar(1000),EP=V(EP0,rE),ER=L(ER0,1000*Math.tan(2.85*D)),SP=V(SP0,rS),sd=SP.length();
+ earthM.position.copy(EP);earthM.scale.setScalar(ER);earthM.rotation.y=(1-e)*s*.03+e*REAL.rot;earthGlow.position.copy(EP);earthGlow.scale.setScalar(ER*2.7);
+ const ld=V(SP0.clone().sub(EP0).normalize(),REAL.sv).normalize();EMAT.uniforms.uSun.value.copy(ld);EMAT.uniforms.uT.value=s;
+ [sunCore,sunGlow,sunHalo,streak].forEach(o=>o.position.copy(SP));const m=1+(1-e)*.9;
+ sunCore.scale.setScalar(ang(2*m,sd));sunGlow.scale.setScalar(ang(8*m,sd));sunHalo.scale.setScalar(ang(30*m,sd));streak.scale.set(ang(75,sd),ang(2.4,sd),1);streak.material.opacity=.5*(1-e);
+ sunCore.visible=sunGlow.visible=sunHalo.visible=e<1||REAL.svis;streak.visible=e<1;earthM.visible=earthGlow.visible=e<1||REAL.evis;
+ sunL.position.copy(ld);sunL.intensity=L(1.6,REAL.sOn?2.2:0);earthL.position.copy(V(EP0,rE).normalize());earthL.intensity=L(1.7,REAL.eOn?.2:0);amb.intensity=L(.6,.18+(REAL.eOn?.14:0));
+ dunes.scale.y=Math.max(.001,1-e);rocks.visible=e<.5;ridge.visible=e>.7;}
+function tick(t){
+ if(T0<0)T0=t;if(introRun)setIntro((t-T0)/1e3);if(KT>0&&K<1)K=Math.min(1,(t-KT)/3600);
+ const e=K*K*(3-2*K),s=t/1e3;
+ if(K<1||introRun){blend(s);if(K>=1){introRun=false;dunes.visible=rocks.visible=false;ground.position.y=-.03}}
+ const iy=-4*D+(mx-.5)*.14+Math.sin(s*.11)*.025,ip=.13+(.5-my)*.05+Math.sin(s*.15)*.01;let dy=yaw-iy;dy=Math.atan2(Math.sin(dy),Math.cos(dy));
+ cam.rotation.set(ip+(pitch-ip)*e,iy+dy*e,0);cam.position.set(0,2+Math.sin(s*.2)*.06*(1-e),-Math.min(s*.12,5)*(1-e));
+ if(K<.4){cam.updateMatrixWorld();const w=cv.clientWidth,h=cv.clientHeight,P=earthM.position.clone(),Q=P.clone().addScaledVector(new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld,0),ER0);P.project(cam);Q.project(cam);const px=(P.x*.5+.5)*w,py=(-P.y*.5+.5)*h,rp=Math.abs(Q.x-P.x)*.5*w,tg=$('tagE');tg.style.left=Math.max(8,px-rp*1.08-tg.offsetWidth)+'px';tg.style.top=(py-rp*.3)+'px'}}
+const dirV=(az,el)=>new THREE.Vector3(Math.sin(az*D)*Math.cos(el*D),Math.sin(el*D),-Math.cos(az*D)*Math.cos(el*D));
+const ang=(deg,d)=>2*d*Math.tan(deg*D/2);
+let sAE={az:0,el:0},eAE={az:0,el:0};
+function upd(){
+ if(!steps.length)return;const f=steps[idx],r=res[cur.id];
+ sAE=sAEf(cur,f);eAE=eAEf(cur,f);const sv=dirV(sAE.az,sAE.el),ev=dirV(eAE.az,eAE.el),sOn=r.sun[idx],eOn=r.ea[idx];
+ sunCore.position.copy(sv).multiplyScalar(1000);sunGlow.position.copy(sunCore.position);sunHalo.position.copy(sunCore.position);
+ sunCore.scale.setScalar(ang(2,1000));sunGlow.scale.setScalar(ang(7,1000));sunHalo.scale.setScalar(ang(26,1000));
+ earthM.position.copy(ev).multiplyScalar(1000);earthM.scale.setScalar(1000*Math.tan(2.85*D));earthM.rotation.y=idx*SH/24*Math.PI*2;
+ earthM.material.uniforms.uSun.value.copy(sv);earthGlow.position.copy(earthM.position);earthGlow.scale.setScalar(ang(12,1000));
+ const vis=sAE.el>-3;sunCore.visible=sunGlow.visible=sunHalo.visible=vis;earthM.visible=earthGlow.visible=eAE.el>-3;
+ sunL.position.copy(sv);sunL.intensity=sOn?2.2:0;amb.intensity=.18+(eOn?.14:0);
+ REAL={sv:sv.clone(),ev:ev.clone(),sOn,eOn,svis:vis,evis:eAE.el>-3,rot:earthM.rotation.y};blend();
+ $('sunEl').textContent=sAE.el.toFixed(1)+'°';$('earEl').textContent=eAE.el.toFixed(1)+'°';
+ setChip('pwr',sOn,'Eye open: sunlit','Eye closed: in shadow');setChip('com',eOn,'Eye open: link to Earth','Eye closed: blocked');$('akhet').classList.toggle('on',Math.abs(sAE.el+SUNR-mask(cur,sAE.az))<.4);
+ $('tlabel').textContent=new Date(f.t).toISOString().slice(0,16).replace('T',' ')+' UTC';$('slider').value=idx;moonScene(f);
+}
+const setChip=(id,on,a,b)=>{const e=$(id);e.textContent=on?a:b;e.className='st '+(on?'go':'stop');e.closest('.eyeblk').querySelector('.eye').classList.toggle('open',on)};
+/* ---------- MOON GLOBE ---------- */
+const GR=new THREE.WebGLRenderer({canvas:$('globe'),antialias:true,alpha:true});GR.setPixelRatio(Math.min(2,devicePixelRatio));GR.setSize(190,190,false);
+const gs=new THREE.Scene(),gc=new THREE.PerspectiveCamera(32,1,.1,50),gl=new THREE.DirectionalLight(0xffffff,2.4),gm=new THREE.Mesh(new THREE.SphereGeometry(1,48,32),new THREE.MeshLambertMaterial({map:moonT}));
+gs.add(gm,gl,new THREE.AmbientLight(0x303848,.5));
+const B=v=>new THREE.Vector3(v[0],v[2],-v[1]),sp=s=>{const p=s.lat*D,l=s.lon*D;return B([Math.cos(p)*Math.cos(l),Math.cos(p)*Math.sin(l),Math.sin(p)])};
+let marks=[];function rebuildMarks(){marks.forEach(m=>gs.remove(m));marks=SITES.map(s=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:0xff6b5e}));m.position.copy(sp(s)).multiplyScalar(1.01);gs.add(m);return m})}
+function moonScene(f){gl.position.copy(B(bodyVec(cur,sAEf(cur,f)))).multiplyScalar(5);const p=sp(cur);gc.position.copy(p).multiplyScalar(3.6);gc.up.set(0,0,-1);gc.lookAt(0,0,0);
+ marks.forEach((m,i)=>{const on=SITES[i]===cur;m.material.color.set(on?0xffc94a:0xff6b5e);m.scale.setScalar(on?1.8:1)});GR.render(gs,gc)}
+/* ---------- LOOP & INPUT ---------- */
+function size(){const w=cv.clientWidth,h=cv.clientHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.fov=w<h?80:62;cam.updateProjectionMatrix()}
+addEventListener('resize',()=>{size();if(steps.length)timeline()});size();
+let last=performance.now(),acc=0;
+(function loop(t){requestAnimationFrame(loop);const dt=Math.min(.1,(t-last)/1e3);last=t;
+ if(playing&&steps.length){acc+=dt*+$('spd').value/SH;if(acc>=1){const k=Math.floor(acc);acc-=k;idx=(idx+k)%steps.length;upd()}}
+ tick(t);R.render(scene,cam)})(last);
+let drag=null;cv.onpointerdown=e=>{if(K<1)return;drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId)};cv.onpointerup=()=>drag=null;
+cv.onpointermove=e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.004;pitch=Math.max(-.1,Math.min(1.2,pitch-(e.clientY-drag[1])*.004));drag=[e.clientX,e.clientY]};
+function look(w){const a=w==='S'?sAE:eAE;if(!steps.length)return;const f=steps[idx],q=w==='S'?sAEf(cur,f):eAEf(cur,f);yaw=-q.az*D;pitch=Math.max(.02,(q.el+4)*D)}
+function jump(key){const a=res[cur.id][key];for(let k=1;k<a.length;k++){const j=(idx+k)%a.length;if(a[j]!==a[idx]){idx=j;upd();return}}}
+$('enter').onclick=()=>{document.body.classList.remove('intro');KT=performance.now();setTimeout(initMap,80)};
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause':'Play'};
+$('slider').oninput=e=>{idx=+e.target.value;upd()};
+$('site').onchange=e=>{cur=SITES.find(s=>s.id===e.target.value);buildRidge(cur);upd();look('E');cards()};
+$('lookS').onclick=()=>look('S');$('lookE').onclick=()=>look('E');
+$('nextS').onclick=()=>jump('sun');$('nextE').onclick=()=>jump('ea');
+/* ---------- ANALYSIS ---------- */
+const fd=h=>h>=48?(h/24).toFixed(1)+' days':h+' h',ds=i=>new Date(steps[i].t).toISOString().slice(0,10);
+const verdict=p=>p>=70?'excellent':p>=50?'good':p>=30?'marginal':'poor';
+function cards(){$('cards').innerHTML=SITES.map(s=>{const r=res[s.id];if(!r)return'';return`<div class="card glass ${s===cur?'sel':''}"><h3>${s.name}${s.id===bestId()?' <span class="chip on">best</span>':''}</h3>${eyes2(r)}`+(simple?
+ `<p class="plain">Sunlight ${r.sp.toFixed(0)}% of the time: ${verdict(r.sp)} for solar power. Longest night ${fd(r.dark)}. Earth in view ${r.ep.toFixed(0)}% of the time, longest signal gap ${fd(r.blk)}.</p>`:
+ `<div class="m">Longest darkness<b>${fd(r.dark)}</b></div><div class="m">Longest comms blackout<b>${fd(r.blk)}</b></div>`)+
+ `<div class="note">Best ${$('win').value}-day window starts ${ds(r.bi)} (sun ${r.bs.toFixed(0)}%, Earth ${r.be.toFixed(0)}%)</div><div class="note">${s.hz?'Terrain: NASA LOLA mask':'Terrain: none loaded, smooth-sphere horizon'}</div></div>`}).join('')}
+function timeline(){const W=Math.max(600,Math.min(1024,innerWidth-36)),rh=13,lh=20,H=SITES.length*(2*rh+lh+8)+24,c=$('tl'),dpr=devicePixelRatio||1;c.width=W*dpr;c.height=H*dpr;c.style.width=W+'px';c.style.height=H+'px';
+ const g=c.getContext('2d');g.scale(dpr,dpr);g.font='12px Sora,system-ui,sans-serif';const bw=W/steps.length;let y=0;
+ for(const s of SITES){const r=res[s.id];g.fillStyle='#e9ecf3';g.fillText(s.name,0,y+13);y+=lh;
+  [[r.sun,'#ffc94a'],[r.ea,'#5aa2ff']].forEach(([a,col])=>{g.fillStyle='#161b27';g.fillRect(0,y,W,rh-2);g.fillStyle=col;a.forEach((v,i)=>{if(v)g.fillRect(i*bw,y,Math.ceil(bw),rh-2)});y+=rh});y+=8}
+ g.fillStyle='#8d97ab';for(let k=0;k<6;k++){const i=Math.floor(k*(steps.length-1)/5);g.fillText(ds(i).slice(5),Math.min(i*bw,W-34),H-5)}}
+/* ---------- BEST SITE, SITE COMPARISON, TIME COMPARISON, WINDOW SCAN ---------- */
+const FC=new Map(),frameAt=ms=>{let f=FC.get(ms);if(!f){f=frame(new Date(ms));FC.set(ms,f)}return f};
+const pf=v=>v.toFixed(1)+'%',addDays=(iso,n)=>new Date(new Date(iso+'T00:00:00Z').getTime()+n*864e5).toISOString().slice(0,10);
+const SCOL=['#ffc94a','#5aa2ff','#4fd08a','#ff6b5e','#c58bff'];
+function metricsFor(s,t0,n){const sun=[],ea=[];for(let i=0;i<n;i++){const f=frameAt(t0+i*SH*36e5),a=sAEf(s,f),b=eAEf(s,f);sun.push(a.el+SUNR>mask(s,a.az));ea.push(b.el>mask(s,b.az))}
+ const both=sun.map((v,i)=>v&&ea[i]),pc=a=>a.reduce((x,y)=>x+y,0)/a.length*100;
+ return{s,sun,ea,both,sp:pc(sun),ep:pc(ea),bp:pc(both),bothRun:longest(both,true)*SH,dark:longest(sun,false)*SH,blk:longest(ea,false)*SH}}
+const CRIT={both:{n:'Both eyes open (Sun and Earth together)',v:r=>r.bp,hi:1},weak:{n:'Weakest eye (the lower of Sun and Earth)',v:r=>Math.min(r.sp,r.ep),hi:1},
+ sun:{n:'Sunlight (power)',v:r=>r.sp,hi:1},earth:{n:'Earth link (communication)',v:r=>r.ep,hi:1},
+ dark:{n:'Shortest darkness',v:r=>r.dark,hi:0,f:fd},blk:{n:'Shortest comms blackout',v:r=>r.blk,hi:0,f:fd}};
+$('crit').innerHTML=Object.entries(CRIT).map(([k,c])=>`<option value="${k}">${c.n}</option>`).join('');
+$('crit').onchange=()=>{rank();cards()};
+const ranked=()=>{const c=CRIT[$('crit').value];return SITES.map(s=>res[s.id]).filter(Boolean).sort((a,b)=>{const d=c.v(b)-c.v(a),x=c.hi?d:-d;return x||b.bp-a.bp||a.dark-b.dark})};
+const bestId=()=>{const r=ranked();return r.length?r[0].s.id:null};
+function rank(){const R=ranked(),c=CRIT[$('crit').value];if(!R.length)return;const w=R[0],f=c.f||pf,tie=R.length>1&&Math.abs(c.v(R[1])-c.v(w))<1e-9;
+ $('best').innerHTML=`<h3 style="margin:0 0 4px;font-size:17px">Best site for this period: <span style="color:var(--sun)">${w.s.name}</span></h3>
+ <p class="note" style="margin:0 0 12px">${c.n}: ${f(c.v(w))}. Both eyes open ${pf(w.bp)} of the time (Sun ${pf(w.sp)}, Earth ${pf(w.ep)}).${tie?` Tied with ${R[1].s.name} on this measure, so the tie is broken by time with both eyes open.`:''}</p>
+ <div class="wrap"><table class="tbl"><tr><th>Site</th><th>Both open</th><th>Sun</th><th>Earth</th><th>Longest dark</th><th>Longest blackout</th></tr>`+
+ R.map((r,i)=>`<tr${i?'':' class="top"'}><td>${i+1}. ${r.s.name}</td><td>${pf(r.bp)}</td><td>${pf(r.sp)}</td><td>${pf(r.ep)}</td><td>${fd(r.dark)}</td><td>${fd(r.blk)}</td></tr>`).join('')+
+ `</table></div><p class="note" style="margin-bottom:0">The ranking only counts sunlight and Earth line of sight in this model. It says nothing about slope, boulders or landing safety, and ${SITES.every(s=>s.hz)?'all terrain horizons come from NASA LOLA':'sites marked “no terrain” use a smooth-sphere horizon, so their sunlight and Earth numbers are upper bounds'}.</p>`}
+const CM=[['Sunlight (Sun eye open)',r=>r.sp,1,pf],['Earth link (Moon eye open)',r=>r.ep,1,pf],['Both eyes open',r=>r.bp,1,pf],['Longest both-open stretch',r=>r.bothRun,1,fd],['Longest darkness',r=>r.dark,0,fd],['Longest comms blackout',r=>r.blk,0,fd]];
+function metricTable(el,cols){el.innerHTML=`<tr><th></th>${cols.map(c=>`<th>${c.h}</th>`).join('')}</tr>`+CM.map(([n,g,hi,f])=>{const v=cols.map(c=>g(c.r)),b=hi?Math.max(...v):Math.min(...v);
+ return`<tr><td>${n}</td>`+v.map(x=>`<td class="${Math.abs(x-b)<1e-9&&v.some(y=>Math.abs(y-b)>1e-9)?'best':''}">${f(x)}</td>`).join('')+'</tr>'}).join('')}
+const cvs=(c,H)=>{const W=Math.max(600,Math.min(1024,innerWidth-36)),dpr=devicePixelRatio||1;c.width=W*dpr;c.height=H*dpr;c.style.width=W+'px';c.style.height=H+'px';const g=c.getContext('2d');g.scale(dpr,dpr);g.font='12px Sora,system-ui,sans-serif';return{g,W}};
+function bars(c,cols){const H=270,{g,W}=cvs(c,H),L=38,T=14,B=46,pw=W-L-8,ph=H-T-B,K=[['#ffc94a','Sun'],['#5aa2ff','Earth'],['#4fd08a','Both']],gw=pw/cols.length;
+ g.strokeStyle='rgba(255,255,255,.12)';g.fillStyle='#8d97ab';g.textAlign='right';for(let v=0;v<=100;v+=25){const y=T+ph*(1-v/100);g.beginPath();g.moveTo(L,y);g.lineTo(W-8,y);g.stroke();g.fillText(v+'%',L-6,y+4)}
+ g.textAlign='center';cols.forEach((col,i)=>{const bw=Math.min(34,gw/4),x0=L+i*gw+gw/2-bw*1.5;[col.r.sp,col.r.ep,col.r.bp].forEach((v,k)=>{g.fillStyle=K[k][0];const h=ph*v/100;g.fillRect(x0+k*bw,T+ph-h,bw-3,h)});g.fillStyle='#e9ecf3';g.fillText(col.h,L+i*gw+gw/2,H-24)});
+ g.textAlign='left';K.forEach(([col,n],k)=>{g.fillStyle=col;g.fillRect(L+k*80,H-14,10,10);g.fillStyle='#8d97ab';g.fillText(n,L+k*80+14,H-5)})}
+function strips(c,items){const rh=13,lh=20,H=items.length*(3*rh+lh+8)+8,{g,W}=cvs(c,H);let y=0;
+ for(const it of items){g.fillStyle='#e9ecf3';g.fillText(it.h,0,y+13);y+=lh;[[it.m.sun,'#ffc94a'],[it.m.ea,'#5aa2ff'],[it.m.both,'#4fd08a']].forEach(([a,col])=>{const bw=W/a.length;g.fillStyle='#161b27';g.fillRect(0,y,W,rh-2);g.fillStyle=col;a.forEach((v,i)=>{if(v)g.fillRect(i*bw,y,Math.ceil(bw),rh-2)});y+=rh});y+=8}}
+function lines(c,labels,series){const H=320,{g,W}=cvs(c,H),L=38,T=14,B=52,pw=W-L-10,ph=H-T-B,n=labels.length,X=i=>L+pw*i/Math.max(1,n-1),Y=v=>T+ph*(1-v/100);
+ g.strokeStyle='rgba(255,255,255,.12)';g.fillStyle='#8d97ab';g.textAlign='right';for(let v=0;v<=100;v+=25){g.beginPath();g.moveTo(L,Y(v));g.lineTo(W-10,Y(v));g.stroke();g.fillText(v+'%',L-6,Y(v)+4)}
+ g.textAlign='center';for(let k=0;k<6;k++){const i=Math.round(k*(n-1)/5);g.fillText(labels[i].slice(5),X(i),H-B+16)}
+ series.forEach((s,k)=>{g.strokeStyle=s.col;g.lineWidth=2;g.beginPath();s.v.forEach((v,i)=>i?g.lineTo(X(i),Y(v)):g.moveTo(X(i),Y(v)));g.stroke();g.fillStyle=s.col;g.beginPath();g.arc(X(s.bi),Y(s.v[s.bi]),5,0,7);g.fill();
+  g.fillRect(L+k*135,H-16,10,10);g.fillStyle='#8d97ab';g.textAlign='left';g.fillText(s.name,L+k*135+14,H-7)});g.lineWidth=1}
+$('pick').onchange=()=>compare();
+function compare(){const cols=[...document.querySelectorAll('#pick input:checked')].map(i=>res[i.value]).filter(Boolean).map(r=>({h:r.s.name,r}));
+ if(cols.length<2){$('cmpT').innerHTML='<tr><td>Tick at least two sites.</td></tr>';$('cmpC').style.display='none';return}$('cmpC').style.display='block';metricTable($('cmpT'),cols);bars($('cmpC'),cols)}
+$('pa').value=$('start').value;$('pb').value=addDays($('start').value,14);$('pc').value=addDays($('start').value,28);$('sfrom').value=$('start').value;
+async function periodRun(){const s=SITES.find(x=>x.id===$('tsite').value),L=Math.round(+$('tlen').value*24/SH);if(!(L>0))return;
+ const cols=[];for(const[id,l]of[['pa','A'],['pb','B'],['pc','C']]){if(!$(id).value)continue;const t0=new Date($(id).value+'T00:00:00Z').getTime();if(!await ensureHz([s],t0,L)){$('timeT').innerHTML='<tr><td>JPL Horizons is not reachable, so there is nothing to compare.</td></tr>';$('timeC').style.display='none';return}cols.push({h:`${l}: ${$(id).value}`,m:metricsFor(s,t0,L)})}
+ if(cols.length<2){$('timeT').innerHTML='<tr><td>Pick at least two periods.</td></tr>';$('timeC').style.display='none';return}
+ $('timeC').style.display='block';metricTable($('timeT'),cols.map(c=>({h:c.h,r:c.m})));strips($('timeC'),cols)}
+$('tgo').onclick=periodRun;
+function scan(){const L=Math.round(+$('slen').value*24/SH),range=Math.min(365,Math.max(5,Math.round(+$('srange').value))),from=$('sfrom').value;if(!from||!(L>0))return;
+ $('scanOut').innerHTML=`<p class="note">Computing ${range} days for ${SITES.length} sites…</p>`;
+ setTimeout(async()=>{const t0=new Date(from+'T00:00:00Z').getTime(),N=range*24+L,labels=Array.from({length:range+1},(_,d)=>addDays(from,d));if(!await ensureHz(SITES,t0,N)){$('scanOut').innerHTML='<p class="note">JPL Horizons is not reachable, so the scan cannot run. No substitute ephemeris is used.</p>';return}
+  const rows=SITES.map((s,k)=>{const m=metricsFor(s,t0,N),ps=[0],pe=[0],pb=[0];m.sun.forEach((v,i)=>{ps.push(ps[i]+v);pe.push(pe[i]+m.ea[i]);pb.push(pb[i]+m.both[i])});
+   const both=[],sun=[],ea=[];for(let d=0;d<=range;d++){const h=d*24;both.push((pb[h+L]-pb[h])/L*100);sun.push((ps[h+L]-ps[h])/L*100);ea.push((pe[h+L]-pe[h])/L*100)}
+   let bi=0,wi=0;both.forEach((v,i)=>{if(v>both[bi]+1e-9||(Math.abs(v-both[bi])<1e-9&&sun[i]+ea[i]>sun[bi]+ea[bi]))bi=i;if(v<both[wi])wi=i});return{s,col:SCOL[k%SCOL.length],both,sun,ea,bi,wi}});
+  const R=rows.slice().sort((a,b)=>b.both[b.bi]-a.both[a.bi]),t=R[0],dd=i=>labels[i],pr=v=>v.toFixed(0)+'%';
+  $('scanOut').innerHTML=`<div class="glass bestbox"><h3 style="margin:0 0 4px;font-size:17px">Best site and start date: <span style="color:var(--sun)">${t.s.name}</span>, starting ${dd(t.bi)}</h3>
+  <p class="note" style="margin:0">A ${L/24}-day mission there has both eyes open ${pr(t.both[t.bi])} of the time (Sun ${pr(t.sun[t.bi])}, Earth ${pr(t.ea[t.bi])}). The worst start for the same site (${dd(t.wi)}) gives ${pr(t.both[t.wi])}.</p></div>
+  <div class="wrap"><table class="tbl"><tr><th>Site</th><th>Best start</th><th>Both open</th><th>Sun</th><th>Earth</th><th>Worst start</th><th>Both open</th><th></th></tr>`+
+  R.map((r,i)=>`<tr${i?'':' class="top"'}><td>${r.s.name}</td><td>${dd(r.bi)}</td><td class="best">${pr(r.both[r.bi])}</td><td>${pr(r.sun[r.bi])}</td><td>${pr(r.ea[r.bi])}</td><td>${dd(r.wi)}</td><td>${pr(r.both[r.wi])}</td><td><button data-site="${r.s.id}" data-date="${dd(r.bi)}" data-len="${L/24}">View in 3D</button></td></tr>`).join('')+'</table></div>';
+  lines($('scanC'),labels,rows.map(r=>({name:r.s.name,col:r.col,v:r.both,bi:r.bi})))},30)}
+$('sgo').onclick=scan;
+$('scanOut').onclick=e=>{const b=e.target.closest('button[data-site]');if(!b)return;cur=SITES.find(s=>s.id===b.dataset.site);$('site').value=cur.id;$('start').value=b.dataset.date;
+ $('win').value=Math.min(60,Math.max(1,Math.round(+b.dataset.len)));$('days').value=Math.max(30,Math.round(+b.dataset.len)+7);buildRidge(cur);compute();scrollTo({top:0,behavior:'smooth'})};
+/* ---------- NASA DATA SOURCES: JPL Horizons, LOLA terrain, Moon Trek ---------- */
+const HZURL='https://ssd.jpl.nasa.gov/api/horizons.api',MON={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11},
+ WAC='https://trek.nasa.gov/tiles/Moon/EQ/LRO_WAC_Mosaic_Global_303ppd_v02/1.0.0/default/default028mm';
+function hzParse(raw){const i=raw.indexOf('$$SOE'),j=raw.indexOf('$$EOE');if(i<0||j<0)throw new Error('Horizons returned no ephemeris rows');
+ let ai=-2,ei=-1;const hl=raw.slice(0,i).split('\n').filter(l=>/Azi/.test(l)&&/Elev/.test(l)).pop();
+ if(hl){const h=hl.split(',').map(x=>x.trim());while(h.length&&!h[h.length-1])h.pop();const a=h.findIndex(x=>/^azi/i.test(x)),e=h.findIndex(x=>/^elev/i.test(x));if(a>=0&&e>=0){ai=a;ei=e}}
+ const out=new Map();
+ for(const line of raw.slice(i+5,j).split('\n')){if(!line.trim())continue;const c=line.split(',').map(x=>x.trim());while(c.length&&!c[c.length-1])c.pop();
+  const m=/^(\d{4})-([A-Za-z]{3})-(\d{2}) (\d{2}):(\d{2})/.exec(c[0]);if(!m)continue;
+  const az=parseFloat(c[ai>=0?ai:c.length+ai]),el=parseFloat(c[ei>=0?ei:c.length+ei]);if(!isFinite(az)||!isFinite(el))continue;
+  out.set(Date.UTC(+m[1],MON[m[2]],+m[3],+m[4],+m[5]),{az:((az%360)+360)%360,el})}
+ if(!out.size)throw new Error('could not read the Horizons rows');return out}
+async function hzFetch(site,target,t0,n){const f=ms=>new Date(ms).toISOString().slice(0,16).replace('T',' ');
+ const p=new URLSearchParams({format:'json',COMMAND:`'${target}'`,OBJ_DATA:'NO',MAKE_EPHEM:'YES',EPHEM_TYPE:'OBSERVER',CENTER:'coord@301',COORD_TYPE:'GEODETIC',
+  SITE_COORD:`${(((site.lon%360)+360)%360).toFixed(6)},${site.lat.toFixed(6)},0`,START_TIME:`'${f(t0)}'`,STOP_TIME:`'${f(t0+(n-1)*36e5)}'`,STEP_SIZE:"'60 m'",QUANTITIES:"'4'",CSV_FORMAT:'YES',ANG_FORMAT:'DEG',EXTRA_PREC:'YES'});
+ const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),90000);
+ try{const r=await fetch(HZURL+'?'+p,{signal:ctl.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(j.error)throw new Error(j.error);return hzParse(j.result||'')}finally{clearTimeout(to)}}
+function setStat(msg){const chip=(ok,t)=>`<span class="src ${ok?'ok':'fb'}">${t}</span>`,nT=SITES.filter(s=>s.hz).length;
+ $('srcStat').innerHTML=chip(SRC.eph==='horizons','Ephemeris: '+(SRC.eph==='horizons'?'JPL Horizons API (live)':'not loaded'))+
+  chip(nT>0,'Terrain: '+(nT===SITES.length?'NASA LOLA masks':nT?`NASA LOLA masks for ${nT} of ${SITES.length} sites`:'none loaded (smooth-sphere horizon)'))+
+  chip(SRC.imagery==='trek','Imagery: '+(SRC.imagery==='trek'?'NASA Moon Trek (LROC WAC)':'not loaded'));
+ $('eph').textContent=msg||(SRC.eph==='horizons'?'Sun and Earth positions come from the live JPL Horizons API.':hzDead?'JPL Horizons could not be reached from this browser. There is no fallback ephemeris, so no results are shown. Press Recompute to retry.':'Waiting for JPL Horizons.');
+ $('terrNote').textContent=nT?`Loaded lola_horizons.json: terrain horizons for ${nT} of ${SITES.length} sites. Sites without a mask use a smooth-sphere horizon.`:'lola_horizons.json not found: no terrain is modelled and every site uses a smooth-sphere horizon (0°). Run tools/make_lola_horizons.py to create it.';
+ $('warn').innerHTML=(nT===SITES.length?'Terrain horizons come from NASA LOLA. ':'Terrain horizons exist only where lola_horizons.json provides them; other sites use a smooth-sphere horizon, which overestimates sunlight and Earth visibility. ')+'Landing-site coordinates are approximate, so validate results against NASA illumination data (Quickmap, LOLA illumination products) before using them for a mission decision.'}
+async function ensureHz(sites,t0,n){if(hzDead){setStat();return false}
+ const last=t0+(n-1)*36e5,ok=h=>h&&h.sun&&h.ea,need=sites.filter(s=>!(ok(HZC.get(s.id+'|'+t0))&&ok(HZC.get(s.id+'|'+last))));
+ if(!need.length){SRC.eph='horizons';setStat();return true}
+ setStat('Querying the JPL Horizons API…');const jobs=[];for(const s of need)for(const tg of['10','399'])jobs.push([s,tg]);let k=0;
+ try{const w=async()=>{while(k<jobs.length){const[s,tg]=jobs[k++],m=await hzFetch(s,tg,t0,n);for(const[t,v]of m){const key=s.id+'|'+t,o=HZC.get(key)||{};o[tg==='10'?'sun':'ea']=v;HZC.set(key,o)}}};
+  await Promise.all([w(),w(),w()]);SRC.eph='horizons';setStat();return true}
+ catch(e){hzDead=true;setStat();console.warn('JPL Horizons request failed',e);return false}}
+const rangeNow=()=>({n:Math.floor(+$('days').value*24/SH),t0:new Date($('start').value+'T00:00:00Z').getTime()});
+function noData(){steps=[];res={};$('cards').innerHTML='';$('best').innerHTML='<p class="note" style="margin:0">No results: JPL Horizons data is not available and no other ephemeris is used. Press Recompute to retry.</p>'}
+async function compute(){const{t0,n}=rangeNow();if(!await ensureHz(SITES,t0,n)){noData();return}computeNow()}
+function hzCheck(){const el=$('hzCheck');if(SRC.eph!=='horizons'||!steps.length){el.textContent='Waiting for live Horizons data.';return}
+ let k=0;for(const f of steps)if(HZC.get(cur.id+'|'+f.t))k++;el.textContent=`${k} hourly Sun/Earth rows from Horizons for ${cur.name}. No other ephemeris is used.`}
+async function loadTerrain(){try{const r=await fetch('lola_horizons.json',{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();
+ for(const s of SITES){const q=j.sites&&j.sites[s.id];if(q&&Array.isArray(q.hz)&&q.hz.length>=8&&q.hz.every(Number.isFinite))s.hz=q.hz}}catch(e){}setStat()}
+async function loadMoonTex(){try{const cols=8,rows=4,c=document.createElement('canvas');c.width=cols*256;c.height=rows*256;const g=c.getContext('2d');
+ await Promise.all(Array.from({length:cols*rows},(_,i)=>new Promise((res,rej)=>{const r=Math.floor(i/cols),q=i%cols,im=new Image();im.crossOrigin='anonymous';
+  im.onload=()=>{g.drawImage(im,q*256,r*256,256,256);res()};im.onerror=()=>rej(new Error('Moon Trek tile'));im.src=`${WAC}/2/${r}/${q}.jpg`})));
+ const t=new THREE.CanvasTexture(c);t.anisotropy=4;gm.material.map=t;gm.material.needsUpdate=true;SRC.imagery='trek'}catch(e){}setStat()}
+let smap=null;const smk={};
+function mapSel(){for(const s of SITES){const m=smk[s.id];if(m)m.setStyle({fillColor:s===cur?'#ffc94a':'#ff6b5e',radius:s===cur?10:7})}}
+function addMapMarker(s){if(!smap||smk[s.id])return;const m=L.circleMarker([s.lat,s.lon>180?s.lon-360:s.lon],{radius:7,color:'#fff',weight:1.5,fillColor:'#ff6b5e',fillOpacity:.95}).addTo(smap).bindTooltip(s.name,{direction:'right',offset:[8,0]});
+ m.on('click',()=>{$('site').value=s.id;$('site').dispatchEvent(new Event('change'))});smk[s.id]=m}
+function initMap(){if(!window.L||smap)return;smap=L.map('smap',{crs:L.CRS.EPSG4326,zoomSnap:.1,minZoom:0,maxZoom:7});
+ L.tileLayer(WAC+'/{z}/{y}/{x}.jpg',{tileSize:256,noWrap:true,minZoom:0,maxZoom:7,attribution:'NASA/JPL Moon Trek · LROC WAC'}).addTo(smap);
+ SITES.forEach(addMapMarker);smap.fitBounds([[-90,-180],[90,180]]);smap.invalidateSize();mapSel()}
+function refreshSites(init){const opts=SITES.map(s=>`<option value="${s.id}">${s.name}</option>`).join(''),
+ had=new Map([...document.querySelectorAll('#pick input')].map(i=>[i.value,i.checked]));
+ $('site').innerHTML=opts;$('site').value=cur.id;$('tsite').innerHTML=opts;
+ $('pick').innerHTML=SITES.map(s=>`<label><input type="checkbox" value="${s.id}" ${init?(s.lat<=-84?'checked':''):(had.has(s.id)?(had.get(s.id)?'checked':''):'checked')}>${s.name}</label>`).join('');
+ rebuildMarks();SITES.forEach(addMapMarker);setStat()}
+$('addSite').onclick=async()=>{const lat=parseFloat($('cLat').value),lon=parseFloat($('cLon').value),err=$('cErr');
+ if(!isFinite(lat)||!isFinite(lon)||lat<-90||lat>90||lon<-180||lon>360){err.textContent='Latitude must be -90 to 90 and longitude -180 to 360 (°E).';return}
+ if(SITES.filter(s=>s.custom).length>=5){err.textContent='Up to 5 custom sites.';return}
+ err.textContent='';const name=($('cName').value||'').replace(/[<>&"'`]/g,'').trim().slice(0,40)||`Custom ${lat.toFixed(2)}, ${lon.toFixed(2)}`,
+ s={id:'c'+(++CUS),name,lat,lon:((lon%360)+360)%360,hz:null,custom:true};SITES.push(s);cur=s;refreshSites();await compute();$('site').value=s.id;buildRidge(cur);upd();coordsUpd();mapSel()};
+const coordsUpd=()=>{$('coords').textContent=`${cur.lat.toFixed(3)}°, ${cur.lon.toFixed(3)}°E (${cur.name})`};
+$('site').addEventListener('change',()=>{mapSel();hzCheck();coordsUpd()});
+$('mzoom').onclick=()=>{initMap();smap.setView([cur.lat,cur.lon>180?cur.lon-360:cur.lon],5)};$('mall').onclick=()=>{initMap();smap.fitBounds([[-90,-180],[90,180]])};
+$('copyc').onclick=()=>{try{navigator.clipboard.writeText(`${cur.lat}, ${cur.lon}`);$('copyc').textContent='Copied'}catch(e){}setTimeout(()=>$('copyc').textContent='Copy',1500)};
+async function boot(){$('best').innerHTML='<p class="note" style="margin:0">Loading Sun and Earth positions from JPL Horizons…</p>';setStat();coordsUpd();await loadTerrain();loadMoonTex();await compute();buildRidge(cur);upd();coordsUpd()}
+$('go').onclick=()=>{hzDead=false;compute()};$('mode').onclick=()=>{simple=!simple;$('mode').textContent=simple?'Switch to expert view':'Switch to simple view';cards()};
+try{refreshSites(true);buildRidge(cur);boot().catch(e=>console.warn(e))}catch(e){document.body.insertAdjacentHTML('afterbegin','<p style="padding:20px">Could not load the 3D library. Check your connection and reload.</p>')}
+</script></body></html>
