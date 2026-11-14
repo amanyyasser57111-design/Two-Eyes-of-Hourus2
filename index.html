@@ -97,7 +97,6 @@ body:not(.intro) .tag{opacity:0}
 <button id="go">Recompute</button><button id="mode">Switch to simple view</button></div>
 <div class="row"><label>Rank sites by<select id="crit"></select></label>
 <span id="eph" class="note" style="max-width:62ch;margin:0 0 6px"></span></div>
-<div class="row"><label>Custom site name<input id="cName" placeholder="optional" style="width:150px"></label><label>Latitude °<input id="cLat" type="number" step="any" min="-90" max="90" placeholder="-89.0" style="width:100px"></label><label>Longitude °E<input id="cLon" type="number" step="any" min="-180" max="360" placeholder="30.0" style="width:100px"></label><button id="addSite">Add custom site</button><span class="note" id="cErr" style="margin:0"></span></div>
 <div class="glass bestbox" id="best"></div>
 <div class="grid" id="cards"></div>
 <h2>Timeline</h2>
@@ -133,7 +132,7 @@ body:not(.intro) .tag{opacity:0}
 <p class="sub">Sun and Earth positions come only from JPL Horizons, terrain only from NASA LOLA elevation data, and imagery only from Moon Trek. Site coordinates are approximate published landing-site values: check them in Quickmap. The chips show which source is actually loaded right now.</p>
 <div class="pick" id="srcStat"></div>
 <div class="grid">
-<div class="card glass"><h3>JPL Horizons</h3><p class="plain">Sun and Earth azimuth and elevation for a Moon-fixed observer (libration included), requested live from the Horizons API for every site.</p>
+<div class="card glass"><h3>JPL Horizons</h3><p class="plain">Sun and Earth azimuth and elevation for a Moon-fixed observer (libration included), computed by the Horizons API for every site and saved by <code>tools/fetch_horizons.py</code> into <code>horizons_data.json</code>, which this page reads.</p>
 <div class="note" id="hzCheck"></div><div class="note"><a class="lnk" href="https://ssd.jpl.nasa.gov/horizons/" target="_blank" rel="noopener">Open Horizons</a></div></div>
 <div class="card glass"><h3>LOLA topography</h3><p class="plain">Terrain horizon masks ray-marched across the LRO LOLA south-polar elevation model (it stops at 80°S, so sites further north have no mask). They are built by <code>tools/make_lola_horizons.py</code> and loaded from <code>lola_horizons.json</code>.</p>
 <div class="note" id="terrNote"></div><div class="note"><a class="lnk" href="https://pgda.gsfc.nasa.gov/products/90" target="_blank" rel="noopener">LOLA south-pole DEM</a></div></div>
@@ -186,10 +185,11 @@ function bodyVec(site,a){const p=site.lat*D,l=site.lon*D,up=[Math.cos(p)*Math.co
 /* smooth-sphere horizon (0°) when no LOLA mask exists for the site */
 function mask(s,az){if(!s.hz)return 0;const n=s.hz.length,p=((az%360)+360)%360/360*n,i=Math.floor(p)%n,t=p-Math.floor(p);return s.hz[i]*(1-t)+s.hz[(i+1)%n]*t}
 const SUNR=.27;
-/* JPL Horizons is the only ephemeris source: no fallback engine */
-const HZC=new Map(),SRC={eph:'none',terrain:'none',imagery:'procedural'};let hzDead=false;
-const NOD={az:0,el:-90};
-const sAEf=(s,f)=>{const h=HZC.get(s.id+'|'+f.t);return h&&h.sun?h.sun:NOD},eAEf=(s,f)=>{const h=HZC.get(s.id+'|'+f.t);return h&&h.ea?h.ea:NOD};
+/* JPL Horizons is the only ephemeris source, pre-fetched into horizons_data.json by tools/fetch_horizons.py (browsers cannot call the Horizons API: it sends no CORS headers) */
+const SRC={eph:'none',terrain:'none',imagery:'procedural',err:''};let HZ=null,HZP=null,hzDead=false;
+const NOD={az:0,el:-90},isoD=ms=>new Date(ms).toISOString().slice(0,10);
+const hzAt=(s,f,k)=>{const d=HZ&&HZ.sites[s.id];if(!d)return NOD;const i=Math.round((f.t-HZ.start_ms)/36e5)*2,a=d[k];return i>=0&&i+1<a.length?{az:a[i],el:a[i+1]}:NOD};
+const sAEf=(s,f)=>hzAt(s,f,'sun'),eAEf=(s,f)=>hzAt(s,f,'ea');
 function longest(a,v){let b=0,c=0;for(const x of a){x===v?b=Math.max(b,++c):c=0}return b}
 function computeNow(){
  const days=+$('days').value,n=Math.floor(days*24/SH),t0=new Date($('start').value+'T00:00:00Z').getTime();
@@ -365,13 +365,13 @@ function compare(){const cols=[...document.querySelectorAll('#pick input:checked
  if(cols.length<2){$('cmpT').innerHTML='<tr><td>Tick at least two sites.</td></tr>';$('cmpC').style.display='none';return}$('cmpC').style.display='block';metricTable($('cmpT'),cols);bars($('cmpC'),cols)}
 $('pa').value=$('start').value;$('pb').value=addDays($('start').value,14);$('pc').value=addDays($('start').value,28);$('sfrom').value=$('start').value;
 async function periodRun(){const s=SITES.find(x=>x.id===$('tsite').value),L=Math.round(+$('tlen').value*24/SH);if(!(L>0))return;
- const cols=[];for(const[id,l]of[['pa','A'],['pb','B'],['pc','C']]){if(!$(id).value)continue;const t0=new Date($(id).value+'T00:00:00Z').getTime();if(!await ensureHz([s],t0,L)){$('timeT').innerHTML='<tr><td>JPL Horizons is not reachable, so there is nothing to compare.</td></tr>';$('timeC').style.display='none';return}cols.push({h:`${l}: ${$(id).value}`,m:metricsFor(s,t0,L)})}
+ const cols=[];for(const[id,l]of[['pa','A'],['pb','B'],['pc','C']]){if(!$(id).value)continue;const t0=new Date($(id).value+'T00:00:00Z').getTime();if(!await ensureHz([s],t0,L)){$('timeT').innerHTML='<tr><td>'+(SRC.err||'No Horizons data.')+'</td></tr>';$('timeC').style.display='none';return}cols.push({h:`${l}: ${$(id).value}`,m:metricsFor(s,t0,L)})}
  if(cols.length<2){$('timeT').innerHTML='<tr><td>Pick at least two periods.</td></tr>';$('timeC').style.display='none';return}
  $('timeC').style.display='block';metricTable($('timeT'),cols.map(c=>({h:c.h,r:c.m})));strips($('timeC'),cols)}
 $('tgo').onclick=periodRun;
 function scan(){const L=Math.round(+$('slen').value*24/SH),range=Math.min(365,Math.max(5,Math.round(+$('srange').value))),from=$('sfrom').value;if(!from||!(L>0))return;
  $('scanOut').innerHTML=`<p class="note">Computing ${range} days for ${SITES.length} sites…</p>`;
- setTimeout(async()=>{const t0=new Date(from+'T00:00:00Z').getTime(),N=range*24+L,labels=Array.from({length:range+1},(_,d)=>addDays(from,d));if(!await ensureHz(SITES,t0,N)){$('scanOut').innerHTML='<p class="note">JPL Horizons is not reachable, so the scan cannot run. No substitute ephemeris is used.</p>';return}
+ setTimeout(async()=>{const t0=new Date(from+'T00:00:00Z').getTime(),N=range*24+L,labels=Array.from({length:range+1},(_,d)=>addDays(from,d));if(!await ensureHz(SITES,t0,N)){$('scanOut').innerHTML='<p class="note">'+(SRC.err||'No Horizons data.')+'</p>';return}
   const rows=SITES.map((s,k)=>{const m=metricsFor(s,t0,N),ps=[0],pe=[0],pb=[0];m.sun.forEach((v,i)=>{ps.push(ps[i]+v);pe.push(pe[i]+m.ea[i]);pb.push(pb[i]+m.both[i])});
    const both=[],sun=[],ea=[];for(let d=0;d<=range;d++){const h=d*24;both.push((pb[h+L]-pb[h])/L*100);sun.push((ps[h+L]-ps[h])/L*100);ea.push((pe[h+L]-pe[h])/L*100)}
    let bi=0,wi=0;both.forEach((v,i)=>{if(v>both[bi]+1e-9||(Math.abs(v-both[bi])<1e-9&&sun[i]+ea[i]>sun[bi]+ea[bi]))bi=i;if(v<both[wi])wi=i});return{s,col:SCOL[k%SCOL.length],both,sun,ea,bi,wi}});
@@ -385,41 +385,24 @@ $('sgo').onclick=scan;
 $('scanOut').onclick=e=>{const b=e.target.closest('button[data-site]');if(!b)return;cur=SITES.find(s=>s.id===b.dataset.site);$('site').value=cur.id;$('start').value=b.dataset.date;
  $('win').value=Math.min(60,Math.max(1,Math.round(+b.dataset.len)));$('days').value=Math.max(30,Math.round(+b.dataset.len)+7);buildRidge(cur);compute();scrollTo({top:0,behavior:'smooth'})};
 /* ---------- NASA DATA SOURCES: JPL Horizons, LOLA terrain, Moon Trek ---------- */
-const HZURL='https://ssd.jpl.nasa.gov/api/horizons.api',MON={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11},
- WAC='https://trek.nasa.gov/tiles/Moon/EQ/LRO_WAC_Mosaic_Global_303ppd_v02/1.0.0/default/default028mm';
-function hzParse(raw){const i=raw.indexOf('$$SOE'),j=raw.indexOf('$$EOE');if(i<0||j<0)throw new Error('Horizons returned no ephemeris rows');
- let ai=-2,ei=-1;const hl=raw.slice(0,i).split('\n').filter(l=>/Azi/.test(l)&&/Elev/.test(l)).pop();
- if(hl){const h=hl.split(',').map(x=>x.trim());while(h.length&&!h[h.length-1])h.pop();const a=h.findIndex(x=>/^azi/i.test(x)),e=h.findIndex(x=>/^elev/i.test(x));if(a>=0&&e>=0){ai=a;ei=e}}
- const out=new Map();
- for(const line of raw.slice(i+5,j).split('\n')){if(!line.trim())continue;const c=line.split(',').map(x=>x.trim());while(c.length&&!c[c.length-1])c.pop();
-  const m=/^(\d{4})-([A-Za-z]{3})-(\d{2}) (\d{2}):(\d{2})/.exec(c[0]);if(!m)continue;
-  const az=parseFloat(c[ai>=0?ai:c.length+ai]),el=parseFloat(c[ei>=0?ei:c.length+ei]);if(!isFinite(az)||!isFinite(el))continue;
-  out.set(Date.UTC(+m[1],MON[m[2]],+m[3],+m[4],+m[5]),{az:((az%360)+360)%360,el})}
- if(!out.size)throw new Error('could not read the Horizons rows');return out}
-async function hzFetch(site,target,t0,n){const f=ms=>new Date(ms).toISOString().slice(0,16).replace('T',' ');
- const p=new URLSearchParams({format:'json',COMMAND:`'${target}'`,OBJ_DATA:'NO',MAKE_EPHEM:'YES',EPHEM_TYPE:'OBSERVER',CENTER:'coord@301',COORD_TYPE:'GEODETIC',
-  SITE_COORD:`${(((site.lon%360)+360)%360).toFixed(6)},${site.lat.toFixed(6)},0`,START_TIME:`'${f(t0)}'`,STOP_TIME:`'${f(t0+(n-1)*36e5)}'`,STEP_SIZE:"'60 m'",QUANTITIES:"'4'",CSV_FORMAT:'YES',ANG_FORMAT:'DEG',EXTRA_PREC:'YES'});
- const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),90000);
- try{const r=await fetch(HZURL+'?'+p,{signal:ctl.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(j.error)throw new Error(j.error);return hzParse(j.result||'')}finally{clearTimeout(to)}}
+const WAC='https://trek.nasa.gov/tiles/Moon/EQ/LRO_WAC_Mosaic_Global_303ppd_v02/1.0.0/default/default028mm';
 function setStat(msg){const chip=(ok,t)=>`<span class="src ${ok?'ok':'fb'}">${t}</span>`,nT=SITES.filter(s=>s.hz).length;
- $('srcStat').innerHTML=chip(SRC.eph==='horizons','Ephemeris: '+(SRC.eph==='horizons'?'JPL Horizons API (live)':'not loaded'))+
+ $('srcStat').innerHTML=chip(SRC.eph==='horizons','Ephemeris: '+(SRC.eph==='horizons'?'NASA JPL Horizons (pre-fetched)':'not loaded'))+
   chip(nT>0,'Terrain: '+(nT===SITES.length?'NASA LOLA masks':nT?`NASA LOLA masks for ${nT} of ${SITES.length} sites`:'none loaded (smooth-sphere horizon)'))+
   chip(SRC.imagery==='trek','Imagery: '+(SRC.imagery==='trek'?'NASA Moon Trek (LROC WAC)':'not loaded'));
- $('eph').textContent=msg||(SRC.eph==='horizons'?'Sun and Earth positions come from the live JPL Horizons API.':hzDead?'JPL Horizons could not be reached from this browser. There is no fallback ephemeris, so no results are shown. Press Recompute to retry.':'Waiting for JPL Horizons.');
+ $('eph').textContent=msg||(SRC.eph==='horizons'?`Sun and Earth positions come from NASA JPL Horizons (hourly, ${isoD(HZ.start_ms)} to ${isoD(HZ.end_ms)}).`:(SRC.err||'Waiting for JPL Horizons data.'));
  $('terrNote').textContent=nT?`Loaded lola_horizons.json: terrain horizons for ${nT} of ${SITES.length} sites. Sites without a mask use a smooth-sphere horizon.`:'lola_horizons.json not found: no terrain is modelled and every site uses a smooth-sphere horizon (0°). Run tools/make_lola_horizons.py to create it.';
  $('warn').innerHTML=(nT===SITES.length?'Terrain horizons come from NASA LOLA. ':'Terrain horizons exist only where lola_horizons.json provides them; other sites use a smooth-sphere horizon, which overestimates sunlight and Earth visibility. ')+'Landing-site coordinates are approximate, so validate results against NASA illumination data (Quickmap, LOLA illumination products) before using them for a mission decision.'}
-async function ensureHz(sites,t0,n){if(hzDead){setStat();return false}
- const last=t0+(n-1)*36e5,ok=h=>h&&h.sun&&h.ea,need=sites.filter(s=>!(ok(HZC.get(s.id+'|'+t0))&&ok(HZC.get(s.id+'|'+last))));
- if(!need.length){SRC.eph='horizons';setStat();return true}
- setStat('Querying the JPL Horizons API…');const jobs=[];for(const s of need)for(const tg of['10','399'])jobs.push([s,tg]);let k=0;
- try{const w=async()=>{while(k<jobs.length){const[s,tg]=jobs[k++],m=await hzFetch(s,tg,t0,n);for(const[t,v]of m){const key=s.id+'|'+t,o=HZC.get(key)||{};o[tg==='10'?'sun':'ea']=v;HZC.set(key,o)}}};
-  await Promise.all([w(),w(),w()]);SRC.eph='horizons';setStat();return true}
- catch(e){hzDead=true;setStat();console.warn('JPL Horizons request failed',e);return false}}
+function loadHz(){if(!HZP)HZP=fetch('horizons_data.json',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(j=>{if(!j.sites||!j.n)throw new Error('bad file');HZ=j;HZ.end_ms=j.start_ms+(j.n-1)*36e5;return true}).catch(e=>{console.warn('horizons_data.json',e);HZ=null;HZP=null;return false});return HZP}
+async function ensureHz(sites,t0,n){
+ if(!await loadHz()){SRC.eph='none';SRC.err='horizons_data.json was not found. Run the "Fetch Horizons data" GitHub Action once, then reload.';setStat();return false}
+ const last=t0+(n-1)*36e5;if(t0<HZ.start_ms||last>HZ.end_ms){SRC.eph='none';SRC.err=`These dates are outside the Horizons data file, which covers ${isoD(HZ.start_ms)} to ${isoD(HZ.end_ms)}. Pick dates inside that range.`;setStat();return false}
+ SRC.eph='horizons';SRC.err='';setStat();return true}
 const rangeNow=()=>({n:Math.floor(+$('days').value*24/SH),t0:new Date($('start').value+'T00:00:00Z').getTime()});
-function noData(){steps=[];res={};$('cards').innerHTML='';$('best').innerHTML='<p class="note" style="margin:0">No results: JPL Horizons data is not available and no other ephemeris is used. Press Recompute to retry.</p>'}
+function noData(){steps=[];res={};$('cards').innerHTML='';$('best').innerHTML=`<p class="note" style="margin:0">No results: ${SRC.err||'JPL Horizons data is not available.'} No other ephemeris is used.</p>`}
 async function compute(){const{t0,n}=rangeNow();if(!await ensureHz(SITES,t0,n)){noData();return}computeNow()}
-function hzCheck(){const el=$('hzCheck');if(SRC.eph!=='horizons'||!steps.length){el.textContent='Waiting for live Horizons data.';return}
- let k=0;for(const f of steps)if(HZC.get(cur.id+'|'+f.t))k++;el.textContent=`${k} hourly Sun/Earth rows from Horizons for ${cur.name}. No other ephemeris is used.`}
+function hzCheck(){const el=$('hzCheck');if(SRC.eph!=='horizons'||!HZ){el.textContent='Waiting for Horizons data.';return}
+ el.textContent=`horizons_data.json: ${HZ.n} hourly Sun/Earth rows per site, ${isoD(HZ.start_ms)} to ${isoD(HZ.end_ms)}. No other ephemeris is used.`}
 async function loadTerrain(){try{const r=await fetch('lola_horizons.json',{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();
  for(const s of SITES){const q=j.sites&&j.sites[s.id];if(q&&Array.isArray(q.hz)&&q.hz.length>=8&&q.hz.every(Number.isFinite))s.hz=q.hz}}catch(e){}setStat()}
 async function loadMoonTex(){try{const cols=8,rows=4,c=document.createElement('canvas');c.width=cols*256;c.height=rows*256;const g=c.getContext('2d');
@@ -438,16 +421,11 @@ function refreshSites(init){const opts=SITES.map(s=>`<option value="${s.id}">${s
  $('site').innerHTML=opts;$('site').value=cur.id;$('tsite').innerHTML=opts;
  $('pick').innerHTML=SITES.map(s=>`<label><input type="checkbox" value="${s.id}" ${init?(s.lat<=-84?'checked':''):(had.has(s.id)?(had.get(s.id)?'checked':''):'checked')}>${s.name}</label>`).join('');
  rebuildMarks();SITES.forEach(addMapMarker);setStat()}
-$('addSite').onclick=async()=>{const lat=parseFloat($('cLat').value),lon=parseFloat($('cLon').value),err=$('cErr');
- if(!isFinite(lat)||!isFinite(lon)||lat<-90||lat>90||lon<-180||lon>360){err.textContent='Latitude must be -90 to 90 and longitude -180 to 360 (°E).';return}
- if(SITES.filter(s=>s.custom).length>=5){err.textContent='Up to 5 custom sites.';return}
- err.textContent='';const name=($('cName').value||'').replace(/[<>&"'`]/g,'').trim().slice(0,40)||`Custom ${lat.toFixed(2)}, ${lon.toFixed(2)}`,
- s={id:'c'+(++CUS),name,lat,lon:((lon%360)+360)%360,hz:null,custom:true};SITES.push(s);cur=s;refreshSites();await compute();$('site').value=s.id;buildRidge(cur);upd();coordsUpd();mapSel()};
 const coordsUpd=()=>{$('coords').textContent=`${cur.lat.toFixed(3)}°, ${cur.lon.toFixed(3)}°E (${cur.name})`};
 $('site').addEventListener('change',()=>{mapSel();hzCheck();coordsUpd()});
 $('mzoom').onclick=()=>{initMap();smap.setView([cur.lat,cur.lon>180?cur.lon-360:cur.lon],5)};$('mall').onclick=()=>{initMap();smap.fitBounds([[-90,-180],[90,180]])};
 $('copyc').onclick=()=>{try{navigator.clipboard.writeText(`${cur.lat}, ${cur.lon}`);$('copyc').textContent='Copied'}catch(e){}setTimeout(()=>$('copyc').textContent='Copy',1500)};
-async function boot(){$('best').innerHTML='<p class="note" style="margin:0">Loading Sun and Earth positions from JPL Horizons…</p>';setStat();coordsUpd();await loadTerrain();loadMoonTex();await compute();buildRidge(cur);upd();coordsUpd()}
+async function boot(){$('best').innerHTML='<p class="note" style="margin:0">Loading Sun and Earth positions from the Horizons data file…</p>';setStat();coordsUpd();await loadTerrain();loadMoonTex();await compute();buildRidge(cur);upd();coordsUpd()}
 $('go').onclick=()=>{hzDead=false;compute()};$('mode').onclick=()=>{simple=!simple;$('mode').textContent=simple?'Switch to expert view':'Switch to simple view';cards()};
 try{refreshSites(true);buildRidge(cur);boot().catch(e=>console.warn(e))}catch(e){document.body.insertAdjacentHTML('afterbegin','<p style="padding:20px">Could not load the 3D library. Check your connection and reload.</p>')}
 </script></body></html>
